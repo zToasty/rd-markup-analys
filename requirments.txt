@@ -1,0 +1,8 @@
+protobuf
+sentencepiece
+torch
+torchvision
+pillow
+transformers
+streamlit
+ultralytics

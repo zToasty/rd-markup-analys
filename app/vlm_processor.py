@@ -3,6 +3,23 @@ from PIL import Image
 from transformers import AutoProcessor, AutoModelForVision2Seq
 
 
+DEFAULT_VLM_PROMPT = (
+    "Проанализируй дорожную разметку на изображении и честно оцени ее износ и влияние на безопасность.\n"
+    "Верни ТОЛЬКО один корректный JSON-объект без какого-либо дополнительного текста до или после него.\n"
+    "Структура JSON должна быть строго такой:\n"
+    "{\n"
+    '  "wear_percent": <оценка износа разметки в процентах на основе изображения>,\n'
+    '  "accident_risk_increase_percent": <оценка увеличения риска аварии в процентах>,\n'
+    '  "recommended_repair_days": <через сколько дней рекомендуется ремонт или осмотр>,\n'
+    '  "comment": "краткий комментарий по состоянию разметки на русском"\n'
+    "}\n"
+    "Не копируй числа из примера, выбирай значения только по изображению.\n"
+    'Если информации недостаточно, честно укажи это в поле "comment" и проставь значения wear_percent, '
+    "accident_risk_increase_percent и recommended_repair_days как 0.\n"
+    "Не добавляй никакого текста вне JSON и не используй несколько JSON-объектов."
+)
+
+
 class VLMProcessor:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -16,8 +33,8 @@ class VLMProcessor:
         if self._loaded:
             return
         
-        print(f"🚀 Загрузка модели: {self.model_id}...")
-        print(f"🤖 Используемое устройство: {self.device}")
+        print(f" Загрузка модели: {self.model_id}...")
+        print(f" Используемое устройство: {self.device}")
         
         self.processor = AutoProcessor.from_pretrained(self.model_id)
         self.model = AutoModelForVision2Seq.from_pretrained(
@@ -27,18 +44,24 @@ class VLMProcessor:
         ).to(self.device)
         
         self._loaded = True
-        print("✅ Модель VLM загружена")
+        print(" Модель VLM загружена")
     
-    def analyze_image(self, image: Image.Image, prompt: str = "Опиши состояние дорожной разметки на этом изображении. Она новая или старая?") -> str:
+    def analyze_image(
+        self,
+        image: Image.Image,
+        prompt: str = DEFAULT_VLM_PROMPT,
+    ) -> str:
         """
-        Анализирует изображение с помощью VLM
-        
+        Анализирует изображение с помощью VLM.
+
         Args:
-            image: PIL Image для анализа
-            prompt: Текст промпта для модели
-            
+            image: PIL Image для анализа.
+            prompt: Текст промпта для модели. По умолчанию просит модель
+                вернуть либо короткое текстовое объяснение на русском,
+                либо JSON с полями состояния разметки.
+
         Returns:
-            str: Результат анализа
+            str: Результат анализа в виде строки (текст или JSON).
         """
         if not self._loaded:
             self.load_model()

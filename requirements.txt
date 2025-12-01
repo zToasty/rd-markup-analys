@@ -1,0 +1,6 @@
+protobuf
+sentencepiece
+pillow
+transformers
+streamlit
+ultralytics

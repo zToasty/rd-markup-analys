@@ -1,1 +1,14 @@
 venv
+trash
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.idea/
+.vscode/
+*.pt
+!yolo/best.pt 

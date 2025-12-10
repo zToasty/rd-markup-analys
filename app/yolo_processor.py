@@ -1,32 +1,17 @@
 from ultralytics import YOLO
 from PIL import Image
 import numpy as np
-import os
 from pathlib import Path
-
 
 class YOLOProcessor:
     def __init__(self, model_path: str = None):
-        """
-        Инициализирует процессор YOLO
-        
-        Args:
-            model_path: Путь к модели YOLO или имя предобученной модели.
-                       Если None, автоматически ищет модель в папке yolo/
-        """
         if model_path is None:
-            # Ищем модель в папке yolo/
             yolo_dir = Path(__file__).parent.parent / "yolo"
             model_files = list(yolo_dir.glob("*.pt"))
-            
             if model_files:
-                # Используем первую найденную модель
                 self.model_path = str(model_files[0])
-                print(f"📁 Найдена модель в папке yolo/: {self.model_path}")
             else:
-                # Используем стандартную модель
                 self.model_path = "yolov8n.pt"
-                print("📦 Используется стандартная модель YOLO")
         else:
             self.model_path = model_path
         
@@ -34,77 +19,54 @@ class YOLOProcessor:
         self._loaded = False
     
     def load_model(self):
-        """Загружает модель YOLO"""
-        if self._loaded:
-            return
-        
-        print(f"🚀 Загрузка модели YOLO: {self.model_path}...")
+        if self._loaded: return
+        print(f"🚀 Загрузка YOLO: {self.model_path}...")
         self.model = YOLO(self.model_path)
         self._loaded = True
-        print("✅ Модель YOLO загружена")
+        print("✅ YOLO загружена")
     
     def detect(self, image: Image.Image, conf_threshold: float = 0.25) -> list:
-        """
-        Выполняет детекцию объектов на изображении
-        
-        Args:
-            image: PIL Image для детекции
-            conf_threshold: Порог уверенности для детекции
-            
-        Returns:
-            list: Список детекций, каждая содержит:
-                - bbox: (x1, y1, x2, y2) координаты bounding box
-                - confidence: Уверенность детекции
-                - class_id: ID класса
-                - class_name: Имя класса
-        """
-        if not self._loaded:
-            self.load_model()
-        
-        # Выполняем детекцию
+        if not self._loaded: self.load_model()
         results = self.model(image, conf=conf_threshold)
-        
         detections = []
         for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                # Получаем координаты
+            for box in result.boxes:
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                confidence = float(box.conf[0].cpu().numpy())
-                class_id = int(box.cls[0].cpu().numpy())
-                class_name = self.model.names[class_id]
-                
                 detections.append({
                     'bbox': (int(x1), int(y1), int(x2), int(y2)),
-                    'confidence': confidence,
-                    'class_id': class_id,
-                    'class_name': class_name
+                    'confidence': float(box.conf[0].cpu().numpy()),
+                    'class_id': int(box.cls[0].cpu().numpy()),
+                    'class_name': self.model.names[int(box.cls[0].cpu().numpy())]
                 })
-        
         return detections
     
-    def crop_detections(self, image: Image.Image, detections: list) -> list:
+    def crop_detections(self, image: Image.Image, detections: list, padding: int = 40) -> list:
         """
-        Обрезает изображение по найденным детекциям
-        
-        Args:
-            image: Исходное PIL Image
-            detections: Список детекций от метода detect()
-            
-        Returns:
-            list: Список обрезанных изображений (PIL Image)
+        Обрезает изображение с отступом (padding), чтобы VLM видела контекст (асфальт).
         """
+        w, h = image.size
         cropped_images = []
+        
         for det in detections:
             x1, y1, x2, y2 = det['bbox']
-            # Обрезаем изображение
+            
+            # Добавляем отступ, но не выходим за границы фото
+            x1 = max(0, x1 - padding)
+            y1 = max(0, y1 - padding)
+            x2 = min(w, x2 + padding)
+            y2 = min(h, y2 + padding)
+            
             cropped = image.crop((x1, y1, x2, y2))
+            
+            # Фильтр совсем мелкого мусора (если кроп меньше 50x50 пикселей - пользы от него нет)
+            if cropped.size[0] < 50 or cropped.size[1] < 50:
+                continue
+
             cropped_images.append({
                 'image': cropped,
-                'bbox': det['bbox'],
+                'bbox': det['bbox'], # Сохраняем оригинальные координаты
                 'confidence': det['confidence'],
                 'class_name': det['class_name']
             })
         
         return cropped_images
-

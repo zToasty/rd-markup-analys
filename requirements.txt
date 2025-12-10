@@ -4,3 +4,6 @@ pillow
 transformers
 streamlit
 ultralytics
+roboflow
+qwen-vl-utils
+accelerate
